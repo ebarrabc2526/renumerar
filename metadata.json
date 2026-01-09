@@ -1,0 +1,5 @@
+{
+  "name": "Trello List Automator & Renumberer",
+  "description": "A developer tool to generate and customize browser console scripts for automating Trello card renumbering and list management.",
+  "requestFramePermissions": []
+}
