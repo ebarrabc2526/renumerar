@@ -5,7 +5,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Renumerar Pro - Trello Power-Up</title>
-    <!-- Cargamos Tailwind con un parche para evitar el warning de producción en este entorno de desarrollo -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = {
@@ -23,7 +22,6 @@
     <style>
       @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
       body { font-family: 'Inter', sans-serif; margin: 0; padding: 0; overflow-x: hidden; }
-      /* Fix para scrollbar en modales de Trello */
       ::-webkit-scrollbar { width: 4px; }
       ::-webkit-scrollbar-track { background: #f1f1f1; }
       ::-webkit-scrollbar-thumb { background: #0079bf; border-radius: 10px; }
@@ -38,8 +36,8 @@
       }
     }
     </script>
-    <!-- Forzamos la carga relativa del punto de entrada para evitar el 404 en subdirectorios -->
-    <script type="module" src="./index.tsx"></script>
+    <!-- Usamos el nombre del archivo directamente sin el punto para que el cargador de módulos lo resuelva relativo al documento actual -->
+    <script type="module" src="index.tsx"></script>
 <link rel="stylesheet" href="/index.css">
 </head>
 <body class="bg-slate-50 text-slate-900">
