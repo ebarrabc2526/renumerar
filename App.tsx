@@ -15,50 +15,59 @@ const App: React.FC = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
   const [log, setLog] = useState<string[]>([]);
+  const [showToast, setShowToast] = useState(false);
+  
   const [status, setStatus] = useState({
     sdkLoaded: false,
     initialized: false,
     isTrelloContext: false
   });
+  
   const tRef = useRef<any>(null);
 
   useEffect(() => {
-    // Obtener URL absoluta base para evitar errores de ruta en Trello
-    const baseUrl = window.location.href.split('?')[0].split('#')[0].replace(/\/$/, '');
+    // 1. Determinar la URL base de forma ultra-precisa
+    const currentUrl = window.location.href.split('?')[0].split('#')[0];
+    const baseUrl = currentUrl.endsWith('/') ? currentUrl.slice(0, -1) : currentUrl;
     setAppUrl(baseUrl);
+
+    console.log("🛠️ Inicializando Power-Up en:", baseUrl);
 
     if (window.TrelloPowerUp) {
       setStatus(s => ({ ...s, sdkLoaded: true }));
 
-      // EVITAR DOBLE INICIALIZACIÓN (Crítico en React 18+)
+      // 2. Lógica de Inicialización (Debe ser rápida para que Trello vea el botón)
       if (!window.__TRELLO_INITIALIZED__) {
-        try {
-          window.TrelloPowerUp.initialize({
-            'list-actions': (t: any) => {
-              return [{
-                text: '🔢 Renumerar esta lista',
-                callback: (t: any) => {
-                  return t.list('id', 'name').then((list: any) => {
-                    // Usar URL absoluta para el modal
-                    const modalUrl = `${baseUrl}/?listId=${list.id}&listName=${encodeURIComponent(list.name)}`;
-                    return t.modal({
-                      title: 'Renumerar: ' + list.name,
-                      url: modalUrl,
-                      height: 350
-                    });
+        window.TrelloPowerUp.initialize({
+          'list-actions': (t: any) => {
+            console.log("📋 Trello solicitó 'list-actions'");
+            return [{
+              text: '🔢 Renumerar esta lista',
+              callback: (t: any) => {
+                return t.list('id', 'name').then((list: any) => {
+                  const modalUrl = `${baseUrl}/?listId=${list.id}&listName=${encodeURIComponent(list.name)}`;
+                  console.log("📦 Abriendo modal con URL:", modalUrl);
+                  return t.modal({
+                    title: 'Renumerar: ' + list.name,
+                    url: modalUrl,
+                    height: 350
                   });
-                }
-              }];
-            }
-          });
-          window.__TRELLO_INITIALIZED__ = true;
-          setStatus(s => ({ ...s, initialized: true }));
-        } catch (e) {
-          console.warn("Power-Up registration failed or already running");
-        }
+                });
+              }
+            }];
+          }
+        });
+        
+        window.__TRELLO_INITIALIZED__ = true;
+        setStatus(s => ({ ...s, initialized: true }));
+        
+        // MOSTRAR MENSAJE DE ÉXITO POR 3 SEGUNDOS
+        setShowToast(true);
+        setTimeout(() => setShowToast(false), 3000);
+        console.log("✅ Power-Up registrado correctamente en Trello");
       }
 
-      // Determinar si estamos dentro del contexto de un modal/iframe de Trello
+      // 3. Detectar si estamos en modo Modal (ejecutándose dentro de Trello)
       const urlParams = new URLSearchParams(window.location.search);
       const listId = urlParams.get('listId');
       
@@ -68,6 +77,8 @@ const App: React.FC = () => {
         tRef.current = window.TrelloPowerUp.iframe();
         setStatus(s => ({ ...s, isTrelloContext: true }));
       }
+    } else {
+      console.error("❌ No se encontró el script de Trello (power-up.min.js)");
     }
   }, []);
 
@@ -75,10 +86,9 @@ const App: React.FC = () => {
     if (!listData || !tRef.current) return;
     const t = tRef.current;
     setIsProcessing(true);
-    setLog(['Obteniendo tarjetas de Trello...']);
+    setLog(['Iniciando proceso de renumeración...']);
     
     try {
-      // Pedimos las tarjetas de la lista específica
       const cards = await t.cards('all');
       const listCards = cards.filter((c: any) => c.idList === listData.id);
       
@@ -88,82 +98,87 @@ const App: React.FC = () => {
         return;
       }
 
-      setLog(prev => [...prev, `Encontradas ${listCards.length} tarjetas.`]);
-
       for (let i = 0; i < listCards.length; i++) {
         const card = listCards[i];
-        // Limpiamos números previos si existen y añadimos el nuevo
         const cleanName = card.name.replace(/^[\d\s.-]+/, '').trim();
         const newTitle = `${(i + 1).toString().padStart(2, '0')}. ${cleanName}`;
         
         setLog(prev => [...prev, `Actualizando: ${newTitle}`]);
         setProgress(Math.round(((i + 1) / listCards.length) * 100));
 
-        // IMPORTANTE: t.set('card', 'shared', 'name', value) es la forma oficial
-        // Requiere que el Power-Up tenga permisos de escritura en el portal de Trello
+        // Intento de actualización (Requiere permisos de escritura en el Power-Up)
         try {
-          // Nota: En modo prueba (sin permisos de escritura) esto podría fallar
-          // pero el log mostrará el intento.
           await t.set(card.id, 'shared', 'name', newTitle);
         } catch (err) {
-          // Si falla el set directo, informamos
-          console.warn("Fallo al escribir nombre, ¿tienes permisos de escritura?", err);
+          console.warn("Fallo al escribir. Asegúrate de tener permisos en el portal de Trello.");
         }
         
-        await new Promise(r => setTimeout(r, 400));
+        await new Promise(r => setTimeout(r, 300));
       }
 
-      setLog(prev => [...prev, '✅ ¡Lista renumerada con éxito!']);
-      setTimeout(() => t.closeModal(), 2000);
+      setLog(prev => [...prev, '✅ Proceso finalizado.']);
+      setTimeout(() => t.closeModal(), 1500);
     } catch (error) {
-      setLog(prev => [...prev, '❌ Error de comunicación con Trello.']);
+      setLog(prev => [...prev, '❌ Error al conectar con Trello.']);
     } finally {
       setIsProcessing(false);
     }
   };
 
-  // VISTA MODAL (DENTRO DE TRELLO)
+  // --- COMPONENTE DE NOTIFICACIÓN (TOAST) ---
+  const Toast = () => (
+    <div className={`fixed top-5 right-5 z-[9999] transition-all duration-500 transform ${showToast ? 'translate-y-0 opacity-100' : '-translate-y-10 opacity-0 pointer-events-none'}`}>
+      <div className="bg-slate-900/90 backdrop-blur-md text-white px-6 py-4 rounded-2xl shadow-2xl border border-white/10 flex items-center gap-4">
+        <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center animate-pulse">
+          <i className="fas fa-rocket text-sm"></i>
+        </div>
+        <div>
+          <p className="font-bold text-sm tracking-tight">Power-Up de Renumeración</p>
+          <p className="text-[11px] text-blue-400 font-medium uppercase tracking-widest">Activado con éxito</p>
+        </div>
+      </div>
+    </div>
+  );
+
+  // VISTA MODAL
   if (mode === 'modal') {
     return (
-      <div className="p-6 bg-white min-h-screen flex flex-col font-sans border-t-4 border-blue-600">
-        <div className="flex justify-between items-start mb-6">
+      <div className="p-6 bg-white min-h-screen flex flex-col font-sans border-t-8 border-blue-600">
+        <div className="flex justify-between items-center mb-8">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-lg font-bold">#</div>
+            <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-blue-100 font-black text-xl">#</div>
             <div>
-              <h2 className="text-xl font-bold text-slate-800 tracking-tight">Renumerar</h2>
-              <p className="text-[10px] text-blue-600 font-black uppercase tracking-widest">{listData?.name}</p>
+              <h2 className="text-2xl font-black text-slate-900 leading-none">Renumerar</h2>
+              <p className="text-xs text-blue-600 font-bold mt-1 uppercase tracking-tighter">{listData?.name}</p>
             </div>
           </div>
-          <button onClick={() => tRef.current?.closeModal()} className="text-slate-300 hover:text-slate-500">
-            <i className="fas fa-times"></i>
-          </button>
         </div>
 
         {!isProcessing && progress === 0 ? (
-          <div className="space-y-4">
-            <div className="bg-blue-50 p-4 rounded-2xl border border-blue-100 text-sm text-blue-800">
-              Esta acción renombrará todas las tarjetas de esta lista siguiendo el orden actual.
-            </div>
+          <div className="space-y-6">
+            <p className="text-sm text-slate-500 leading-relaxed font-medium">
+              Se reordenarán los nombres de las tarjetas como <span className="text-slate-900 font-bold">01. Nombre</span>, <span className="text-slate-900 font-bold">02. Nombre</span>...
+            </p>
             <button 
               onClick={runRenumbering}
-              className="w-full bg-slate-900 hover:bg-black text-white font-bold py-4 rounded-2xl shadow-xl transition-all active:scale-95 flex items-center justify-center gap-3"
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-5 rounded-2xl shadow-2xl shadow-blue-200 transition-all hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-3 text-lg"
             >
-              <i className="fas fa-magic"></i> EJECUTAR AHORA
+              <i className="fas fa-play-circle text-xl"></i> EJECUTAR AHORA
             </button>
           </div>
         ) : (
-          <div className="space-y-4">
-            <div className="relative pt-1">
-              <div className="flex mb-2 items-center justify-between">
-                <div><span className="text-xs font-semibold inline-block py-1 px-2 uppercase rounded-full text-blue-600 bg-blue-200">{progress}%</span></div>
-                <div className="text-right"><span className="text-xs font-semibold inline-block text-blue-600">{progress === 100 ? 'Completado' : 'Procesando...'}</span></div>
-              </div>
-              <div className="overflow-hidden h-2 mb-4 text-xs flex rounded-full bg-blue-100">
-                <div style={{ width: `${progress}%` }} className="shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center bg-blue-600 transition-all duration-500"></div>
-              </div>
+          <div className="space-y-6">
+            <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100">
+               <div className="flex justify-between text-xs font-black text-slate-400 mb-2 uppercase tracking-widest">
+                <span>Progreso</span>
+                <span>{progress}%</span>
+               </div>
+               <div className="h-3 w-full bg-slate-200 rounded-full overflow-hidden">
+                <div style={{ width: `${progress}%` }} className="h-full bg-blue-600 transition-all duration-300 shadow-[0_0_15px_rgba(37,99,235,0.4)]"></div>
+               </div>
             </div>
-            <div className="bg-slate-50 rounded-xl p-3 h-28 overflow-y-auto font-mono text-[9px] text-slate-500 border border-slate-200">
-              {log.map((line, i) => <div key={i} className="mb-1">{line}</div>)}
+            <div className="bg-slate-900 rounded-2xl p-4 h-24 overflow-y-auto font-mono text-[10px] text-emerald-400 border border-slate-800">
+              {log.map((line, i) => <div key={i} className="mb-1 opacity-80">{line}</div>)}
             </div>
           </div>
         )}
@@ -174,58 +189,63 @@ const App: React.FC = () => {
   // VISTA DE CONFIGURACIÓN
   return (
     <div className="min-h-screen bg-[#F4F5F7] p-6 md:p-12 flex flex-col items-center font-sans">
-      <div className="max-w-2xl w-full space-y-8">
-        
-        <header className="text-center space-y-4">
-          <div className="w-20 h-20 bg-blue-600 rounded-[2rem] shadow-2xl shadow-blue-200 mx-auto flex items-center justify-center text-white text-4xl">
-            <i className="fas fa-list-ol"></i>
+      <Toast />
+      
+      <div className="max-w-2xl w-full space-y-10">
+        <header className="text-center space-y-6">
+          <div className="w-24 h-24 bg-white rounded-[2.5rem] shadow-xl mx-auto flex items-center justify-center text-blue-600 text-5xl relative group">
+            <div className="absolute inset-0 bg-blue-600 rounded-[2.5rem] blur-2xl opacity-10 group-hover:opacity-20 transition-opacity"></div>
+            <i className="fas fa-sort-numeric-down relative"></i>
           </div>
-          <h1 className="text-4xl font-black text-slate-900">Configuración del Power-Up</h1>
-          <p className="text-slate-500">Sigue estos pasos finales para que el botón aparezca en Trello.</p>
+          <div className="space-y-2">
+            <h1 className="text-5xl font-black text-slate-900 tracking-tighter">Renumerar Pro</h1>
+            <p className="text-slate-500 text-lg font-medium italic">El Power-Up definitivo para listas ordenadas.</p>
+          </div>
         </header>
 
-        <section className="bg-white rounded-[2.5rem] shadow-sm border border-slate-200 overflow-hidden">
-          <div className="p-8 space-y-6">
-            <div className="flex items-start gap-4 p-4 bg-emerald-50 rounded-2xl border border-emerald-100">
-              <div className="text-emerald-500 mt-1"><i className="fas fa-check-circle text-xl"></i></div>
-              <div>
-                <h4 className="font-bold text-emerald-900 text-sm">Tu URL de GitHub Pages es válida</h4>
-                <p className="text-xs text-emerald-700 font-mono mt-1 break-all">{appUrl}</p>
+        <main className="bg-white rounded-[3rem] shadow-xl shadow-slate-200/50 border border-slate-100 overflow-hidden">
+          <div className="p-10 space-y-8">
+            <div className="p-6 bg-blue-50 rounded-3xl border border-blue-100 space-y-3">
+              <label className="text-[10px] font-black text-blue-400 uppercase tracking-[0.2em] block">URL del Iframe Connector</label>
+              <div className="flex gap-3">
+                <input readOnly value={appUrl} className="flex-1 bg-white border-2 border-blue-100 px-5 py-3 rounded-2xl text-sm font-mono text-blue-700 outline-none" />
+                <button onClick={() => {navigator.clipboard.writeText(appUrl); alert("¡URL Copiada!")}} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-2xl font-bold text-sm transition-all shadow-lg shadow-blue-200">COPIAR</button>
               </div>
             </div>
 
-            <div className="space-y-4">
-              <h3 className="font-bold text-slate-800 flex items-center gap-2">
-                <span className="w-6 h-6 bg-slate-100 rounded-full flex items-center justify-center text-[10px]">1</span>
-                Paso Final en Trello:
-              </h3>
-              <p className="text-sm text-slate-600 leading-relaxed">
-                Ve al <a href="https://trello.com/power-ups/admin" target="_blank" className="text-blue-600 font-bold underline">Portal de Desarrolladores</a>, selecciona tu Power-Up y en la pestaña <b>"Capabilities"</b> asegúrate de que el checkbox <b>"List actions"</b> esté marcado.
-              </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100">
+                <h4 className="font-black text-slate-800 text-xs uppercase tracking-widest mb-3 flex items-center gap-2">
+                  <i className="fas fa-check-circle text-green-500"></i> Estado del SDK
+                </h4>
+                <p className="text-sm font-bold text-slate-500">{status.sdkLoaded ? 'Conectado a Trello' : 'Esperando SDK...'}</p>
+              </div>
+              <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100">
+                <h4 className="font-black text-slate-800 text-xs uppercase tracking-widest mb-3 flex items-center gap-2">
+                  <i className="fas fa-cog text-blue-500"></i> Inicialización
+                </h4>
+                <p className="text-sm font-bold text-slate-500">{status.initialized ? 'Completada' : 'Pendiente'}</p>
+              </div>
             </div>
 
-            <div className="space-y-4 pt-4">
-              <h3 className="font-bold text-slate-800 flex items-center gap-2">
-                <span className="w-6 h-6 bg-slate-100 rounded-full flex items-center justify-center text-[10px]">2</span>
-                Limpieza de Caché:
-              </h3>
-              <p className="text-sm text-slate-600 leading-relaxed">
-                Trello guarda copias antiguas de tu Power-Up. Para ver los cambios nuevos, presiona <b>Ctrl + F5</b> en la pestaña de tu tablero de Trello.
-              </p>
-              <button 
-                onClick={() => window.location.reload()}
-                className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 rounded-xl text-sm transition-colors"
-              >
-                <i className="fas fa-sync-alt mr-2"></i> Recargar esta página
-              </button>
+            <div className="bg-slate-900 p-8 rounded-3xl text-white shadow-2xl relative overflow-hidden">
+               <div className="absolute top-0 right-0 p-4 opacity-10 text-6xl"><i className="fas fa-question-circle"></i></div>
+               <h3 className="text-xl font-bold mb-4 flex items-center gap-3 relative">
+                 <span className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-xs">?</span>
+                 ¿Sigue sin aparecer el botón?
+               </h3>
+               <ul className="space-y-4 text-sm text-slate-400 relative">
+                 <li className="flex gap-3"><span className="text-blue-500 font-black">1.</span> En Trello, ve a "Capabilities" y marca <b>"List actions"</b>.</li>
+                 <li className="flex gap-3"><span className="text-blue-500 font-black">2.</span> Ve a tu tablero, pulsa el botón Power-Ups y asegúrate de haber <b>"Añadido"</b> este Power-Up manualmente.</li>
+                 <li className="flex gap-3"><span className="text-blue-500 font-black">3.</span> Pulsa <b>Ctrl + F5</b> en la pestaña de Trello para forzar la actualización.</li>
+               </ul>
             </div>
           </div>
-        </section>
+        </main>
 
-        <footer className="text-center">
-          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Estado del SDK: {status.sdkLoaded ? 'Conectado' : 'Esperando...'}</p>
+        <footer className="text-center text-slate-400 text-[10px] font-black uppercase tracking-[0.3em] pb-10">
+          Trello Power-Up Framework • 2024
         </footer>
-
       </div>
     </div>
   );
