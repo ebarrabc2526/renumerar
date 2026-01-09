@@ -4,14 +4,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Renumerar Pro - Trello Power-Up</title>
+    <title>Renumerar Pro | Trello Tools</title>
+    <!-- Favicon para evitar el error 404 -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔢</text></svg>">
+    
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = {
         theme: {
           extend: {
-            fontFamily: {
-              sans: ['Inter', 'sans-serif'],
+            colors: {
+              trello: {
+                blue: '#0079bf',
+                dark: '#172b4d',
+                green: '#51e898'
+              }
             }
           }
         }
@@ -19,13 +26,13 @@
     </script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://p.trellocdn.com/power-up.min.js"></script>
+    
     <style>
-      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-      body { font-family: 'Inter', sans-serif; margin: 0; padding: 0; overflow-x: hidden; }
-      ::-webkit-scrollbar { width: 4px; }
-      ::-webkit-scrollbar-track { background: #f1f1f1; }
-      ::-webkit-scrollbar-thumb { background: #0079bf; border-radius: 10px; }
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
+      body { font-family: 'Inter', sans-serif; }
+      .glass { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); }
     </style>
+
     <script type="importmap">
     {
       "imports": {
@@ -36,12 +43,22 @@
       }
     }
     </script>
-    <!-- Usamos el nombre del archivo directamente sin el punto para que el cargador de módulos lo resuelva relativo al documento actual -->
+    
+    <!-- Cargamos el punto de entrada. Si GitHub da problemas de MIME type, 
+         asegúrate de que el archivo index.tsx existe en la carpeta /renumerar/ -->
     <script type="module" src="index.tsx"></script>
 <link rel="stylesheet" href="/index.css">
 </head>
-<body class="bg-slate-50 text-slate-900">
-    <div id="root"></div>
+<body class="bg-[#f4f5f7] text-slate-900">
+    <div id="root">
+        <!-- Loader inicial por si tarda en cargar el JS -->
+        <div class="min-h-screen flex items-center justify-center">
+            <div class="text-center">
+                <div class="inline-block animate-spin rounded-full h-8 w-8 border-4 border-trello-blue border-t-transparent mb-4"></div>
+                <p class="text-slate-500 font-medium">Cargando Renumerar Pro...</p>
+            </div>
+        </div>
+    </div>
 <script type="module" src="/index.tsx"></script>
 </body>
 </html>
