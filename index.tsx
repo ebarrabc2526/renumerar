@@ -9,8 +9,7 @@ if (!rootElement) {
 }
 
 const root = ReactDOM.createRoot(rootElement);
+// Eliminamos StrictMode para asegurar que el Power-Up se inicialice una sola vez y de forma limpia
 root.render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
+  <App />
 );
