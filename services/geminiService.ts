@@ -4,8 +4,9 @@ import { GoogleGenAI, Type } from "@google/genai";
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 export const refineScript = async (baseScript: string, userFeedback: string) => {
+  // Use gemini-3-pro-preview for complex coding and script refinement tasks as per guidelines
   const response = await ai.models.generateContent({
-    model: "gemini-3-flash-preview",
+    model: "gemini-3-pro-preview",
     contents: `El usuario tiene este script de consola para Trello:
     \`\`\`javascript
     ${baseScript}
@@ -27,5 +28,7 @@ export const refineScript = async (baseScript: string, userFeedback: string) => 
     }
   });
 
-  return JSON.parse(response.text);
+  // Safe access to .text property and trimming as recommended for JSON responses
+  const jsonStr = response.text?.trim() || "{}";
+  return JSON.parse(jsonStr);
 };
